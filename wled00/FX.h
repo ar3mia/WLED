@@ -119,7 +119,7 @@
 #define IS_REVERSE      ((SEGMENT.options & REVERSE     ) == REVERSE     )
 #define IS_SELECTED     ((SEGMENT.options & SELECTED    ) == SELECTED    )
 
-#define MODE_COUNT  118
+#define MODE_COUNT  119
 
 #define FX_MODE_STATIC                   0
 #define FX_MODE_BLINK                    1
@@ -239,6 +239,7 @@
 #define FX_MODE_BLENDS                 115
 #define FX_MODE_TV_SIMULATOR           116
 #define FX_MODE_DYNAMIC_SMOOTH         117
+#define FX_MODE_CLOCK                  118
 
 
 class WS2812FX {
@@ -609,6 +610,7 @@ class WS2812FX {
       _mode[FX_MODE_BLENDS]                  = &WS2812FX::mode_blends;
       _mode[FX_MODE_TV_SIMULATOR]            = &WS2812FX::mode_tv_simulator;
       _mode[FX_MODE_DYNAMIC_SMOOTH]          = &WS2812FX::mode_dynamic_smooth;
+      _mode[FX_MODE_CLOCK]                   = &WS2812FX::mode_clock;
 
       _brightness = DEFAULT_BRIGHTNESS;
       currentPalette = CRGBPalette16(CRGB::Black);
@@ -833,7 +835,8 @@ class WS2812FX {
       mode_candy_cane(void),
       mode_blends(void),
       mode_tv_simulator(void),
-      mode_dynamic_smooth(void);
+      mode_dynamic_smooth(void),
+      mode_clock(void);
 
   private:
     uint32_t crgb_to_col(CRGB fastled);
