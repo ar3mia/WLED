@@ -42,30 +42,24 @@ uint16_t WS2812FX::mode_static(void) {
  * Blink/strobe function
  * Alternate between color1 and color2
  * if(strobe == true) then create a strobe effect
- * NOTE: Maybe re-rework without timer
  */
 uint16_t WS2812FX::blink(uint32_t color1, uint32_t color2, bool strobe, bool do_palette) {
-  uint16_t stateTime = SEGENV.aux1;
   uint32_t cycleTime = (255 - SEGMENT.speed)*20;
-  uint32_t onTime = 0;
-  uint32_t offTime = cycleTime;
-
-  if (!strobe) {
-    onTime = (cycleTime * SEGMENT.intensity) >> 8;
-    offTime = cycleTime - onTime;
+  uint32_t onTime = FRAMETIME;
+  if (!strobe) onTime += ((cycleTime * SEGMENT.intensity) >> 8);
+  cycleTime += FRAMETIME*2;
+  uint32_t it = now / cycleTime;
+  uint32_t rem = now % cycleTime;
+  
+  bool on = false;
+  if (it != SEGENV.step //new iteration, force on state for one frame, even if set time is too brief
+      || rem <= onTime) { 
+    on = true;
   }
   
-  stateTime = ((SEGENV.aux0 & 1) == 0) ? onTime : offTime;
-  stateTime += 20;
-    
-  if (now - SEGENV.step > stateTime)
-  {
-    SEGENV.aux0++;
-    SEGENV.aux1 = stateTime;
-    SEGENV.step = now;
-  }
+  SEGENV.step = it; //save previous iteration
 
-  uint32_t color = ((SEGENV.aux0 & 1) == 0) ? color1 : color2;
+  uint32_t color = on ? color1 : color2;
   if (color == color1 && do_palette)
   {
     for(uint16_t i = 0; i < SEGLEN; i++) {
@@ -3525,7 +3519,7 @@ uint16_t WS2812FX::mode_twinkleup(void) {                 // A very short twinkl
     uint8_t ranstart = random8();                         // The starting value (aka brightness) for each pixel. Must be consistent each time through the loop for this to work.
     uint8_t pixBri = sin8(ranstart + 16 * now/(256-SEGMENT.speed));
     if (random8() > SEGMENT.intensity) pixBri = 0;
-    setPixelColor(i, color_blend(SEGCOLOR(1), color_from_palette(i*20, false, PALETTE_SOLID_WRAP, 0), pixBri));
+    setPixelColor(i, color_blend(SEGCOLOR(1), color_from_palette(random8()+now/100, false, PALETTE_SOLID_WRAP, 0), pixBri));
   }
 
   return FRAMETIME;
@@ -3963,7 +3957,6 @@ uint16_t WS2812FX::mode_tv_simulator(void) {
 */
 
 //CONFIG
-#define BACKLIGHT 5
 #define W_MAX_COUNT 20            //Number of simultaneous waves
 #define W_MAX_SPEED 6             //Higher number, higher speed
 #define W_WIDTH_FACTOR 6          //Higher number, smaller waves
@@ -4192,10 +4185,13 @@ uint16_t WS2812FX::mode_clock(void) {
     if(timeHour == 0) timeHour = 12;
   }
 
-  #ifdef USE_COLON_SEPARATOR
-    uint8_t ledsPerDot = 1;         //1 LED per seconds dot, so 2 in total
-    #define dotColor 0x999999
-  #endif
+  uint8_t backlight = 1; //dimmer backlight if less active colors
+  if (SEGCOLOR(0)) backlight++;
+  if (SEGCOLOR(1)) backlight++;
+  if (SEGCOLOR(2)) backlight++;
+  //Loop through LEDs to determine color
+  for(int i = 0; i < SEGLEN; i++) {    
+    CRGB mixedRgb = CRGB(backlight, backlight, backlight);
 
 
   uint8_t digits[4];
@@ -4242,6 +4238,7 @@ uint16_t WS2812FX::mode_clock(void) {
         index++;
       }
     }
+<<<<<<< HEAD
     #ifdef USE_COLON_SEPARATOR
       if(numberOfSegments - 2 == i) {
         if(timeSecond % 2 == 0) {                                                           //Light up on even seconds
@@ -4258,6 +4255,10 @@ uint16_t WS2812FX::mode_clock(void) {
         }
       }
     #endif
+=======
+
+    setPixelColor(i, mixedRgb[0], mixedRgb[1], mixedRgb[2]);
+>>>>>>> 3d51d1e345e36de84bbd09284e626c55ba4c2b65
   }
   if(useAMPM) {
     if(digits[0] > 0) {

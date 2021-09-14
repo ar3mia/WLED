@@ -24,8 +24,20 @@ struct BusConfig {
     colorOrder = pcolorOrder; reversed = rev; skipAmount = skip;
     uint8_t nPins = 1;
     if (type > 47) nPins = 2;
-    else if (type > 41 && type < 46) nPins = NUM_PWM_PINS(type);
+    else if (type > 40 && type < 46) nPins = NUM_PWM_PINS(type);
     for (uint8_t i = 0; i < nPins; i++) pins[i] = ppins[i];
+  }
+
+  //validates start and length and extends total if needed
+  bool adjustBounds(uint16_t& total) {
+    if (!count) count = 1;
+    if (count > MAX_LEDS_PER_BUS) count = MAX_LEDS_PER_BUS;
+    if (start >= MAX_LEDS) return false;
+    //limit length of strip if it would exceed total permissible LEDs
+    if (start + count > MAX_LEDS) count = MAX_LEDS - start;
+    //extend total count accordingly
+    if (start + count > total) total = start + count;
+    return true;
   }
 };
 
@@ -107,20 +119,20 @@ class BusDigital : public Bus {
   public:
   BusDigital(BusConfig &bc, uint8_t nr) : Bus(bc.type, bc.start) {
     if (!IS_DIGITAL(bc.type) || !bc.count) return;
+    if (!pinManager.allocatePin(bc.pins[0], true, PinOwner::BusDigital)) return;
     _pins[0] = bc.pins[0];
-    if (!pinManager.allocatePin(_pins[0])) return;
     if (IS_2PIN(bc.type)) {
-      _pins[1] = bc.pins[1];
-      if (!pinManager.allocatePin(_pins[1])) {
+      if (!pinManager.allocatePin(bc.pins[1], true, PinOwner::BusDigital)) {
         cleanup(); return;
       }
+      _pins[1] = bc.pins[1];
     }
     reversed = bc.reversed;
     _skip = bc.skipAmount;    //sacrificial pixels
     _len = bc.count + _skip;
     _iType = PolyBus::getI(bc.type, _pins, nr);
     if (_iType == I_NONE) return;
-    _busPtr = PolyBus::create(_iType, _pins, _len);
+    _busPtr = PolyBus::create(_iType, _pins, _len, nr);
     _valid = (_busPtr != nullptr);
     _colorOrder = bc.colorOrder;
     //Serial.printf("Successfully inited strip %u (len %u) with type %u and pins %u,%u (itype %u)\n",nr, len, type, pins[0],pins[1],_iType);
@@ -194,8 +206,8 @@ class BusDigital : public Bus {
     _iType = I_NONE;
     _valid = false;
     _busPtr = nullptr;
-    pinManager.deallocatePin(_pins[0]);
-    pinManager.deallocatePin(_pins[1]);
+    pinManager.deallocatePin(_pins[1], PinOwner::BusDigital);
+    pinManager.deallocatePin(_pins[0], PinOwner::BusDigital);
   }
 
   ~BusDigital() {
@@ -229,10 +241,11 @@ class BusPwm : public Bus {
     #endif
 
     for (uint8_t i = 0; i < numPins; i++) {
-      _pins[i] = bc.pins[i];
-      if (!pinManager.allocatePin(_pins[i])) {
+      uint8_t currentPin = bc.pins[i];
+      if (!pinManager.allocatePin(currentPin, true, PinOwner::BusPwm)) {
         deallocatePins(); return;
       }
+      _pins[i] = currentPin; // store only after allocatePin() succeeds
       #ifdef ESP8266
       pinMode(_pins[i], OUTPUT);
       #else
@@ -321,7 +334,7 @@ class BusPwm : public Bus {
       #else
       if (_ledcStart < 16) ledcDetachPin(_pins[i]);
       #endif
-      pinManager.deallocatePin(_pins[i]);
+      pinManager.deallocatePin(_pins[i], PinOwner::BusPwm);
     }
     #ifdef ARDUINO_ARCH_ESP32
     pinManager.deallocateLedc(_ledcStart, numPins);
